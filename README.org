@@ -1,0 +1,7 @@
+* Dropped Olivetti
+
+Just [[https://github.com/rnkn/olivetti][Olivetti]] if it was dropped as a child.
+
+See, Olivetti is a buffer-local mode, and half its code is to take care of all the edge cases that may entail.  But that did not fit how I wanted to use it.  I added it to every hook I could think of and still some buffers, like =*Async-native-compile-log*= did not get the effect.
+
+Dropped-child Olivetti is just a global mode.
