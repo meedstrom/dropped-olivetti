@@ -142,33 +142,16 @@
   (defconst olivetti-version
     (lm-version load-file-name)))
 
-(defvar-local olivetti--visual-line-mode
-  nil
-  "Value of `visual-line-mode' when when `olivetti-mode' is enabled.")
-
-(defvar-local olivetti--split-window-preferred-function
+(defvar olivetti--split-window-preferred-function
   nil
   "Value of `split-window-preferred-function' at initialization.")
 
-(defvar-local olivetti--face-remap
+(defvar olivetti--face-remap
   nil
   "Saved cookie from `face-remap-add-relative' at initialization.")
 
 
 ;;; Options ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defcustom olivetti-mode-on-hook
-  '(visual-line-mode)
-  "Hook for `olivetti-mode', run after the mode is activated."
-  :type 'hook
-  :options '(visual-line-mode)
-  :safe 'hook)
-
-(defcustom olivetti-mode-off-hook
-  nil
-  "Hook for `olivetti-mode', run after the mode is deactivated."
-  :type 'hook
-  :safe 'hook)
 
 (defcustom olivetti-body-width
   nil
@@ -191,7 +174,7 @@ This option does not affect file contents."
                  (float 0.5))
   :safe (lambda (value)
           (or (numberp value) (null value))))
-(make-variable-buffer-local 'olivetti-body-width)
+;; (make-variable-buffer-local 'olivetti-body-width)
 
 (defcustom olivetti-minimum-body-width
   40
@@ -290,13 +273,6 @@ if it is an integer, and otherwise return WIDTH."
   "Call `olivetti-reset-window' on all windows."
   (walk-windows #'olivetti-reset-window nil t))
 
-;; FIXME: these split-window functions seem to be ignored by
-;; `window-toggle-side-windows'
-;; WORKAROUND:
-;; (with-eval-after-load 'olivetti
-;;   (advice-add 'window-toggle-side-windows
-;;               :before 'olivetti-reset-all-windows))
-
 (defun olivetti-split-window (&optional window size side pixelwise)
   "Call `split-window' after resetting WINDOW.
 Pass SIZE, SIDE and PIXELWISE unchanged."
@@ -315,12 +291,11 @@ If WINDOW-OR-FRAME is a frame, cycle through windows displaying
 current buffer in that frame, otherwise only work on the selected
 window."
   (if (framep window-or-frame)
-      (mapc #'olivetti-set-window
-            (get-buffer-window-list nil nil window-or-frame))
-    ;; WINDOW-OR-FRAME passed below *must* be a window
+      (with-selected-frame window-or-frame
+        (walk-windows #'olivetti-set-window))
     (with-selected-window window-or-frame
-      (olivetti-reset-window window-or-frame)
-      (when olivetti-mode
+      (unless (minibufferp)
+        (olivetti-reset-window window-or-frame)
         ;; If `olivetti-body-width' is nil, we need to calculate from
         ;; `fill-column'
         (when (null olivetti-body-width)
@@ -368,72 +343,6 @@ Cycle through all windows in all visible frames displaying the
 current buffer, and call `olivetti-set-window'."
   (mapc #'olivetti-set-window (get-buffer-window-list nil nil 'visible)))
 
-
-;;; Width Interaction ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defun olivetti-set-width (width)
-  "Set text body width to WIDTH with relative margins.
-WIDTH may be an integer specifying columns or a float specifying
-a fraction of the window width."
-  (interactive
-   (list (if current-prefix-arg
-             (prefix-numeric-value current-prefix-arg)
-           (read-number "Set text body width (integer or float): "
-                        olivetti-body-width))))
-  (setq olivetti-body-width width)
-  (olivetti-set-buffer-windows)
-  (message "Text body width set to %s" olivetti-body-width))
-
-(defun olivetti-expand (&optional arg)
-  "Incrementally increase the value of `olivetti-body-width'.
-If prefixed with ARG, incrementally decrease."
-  (interactive "P")
-  (let* ((p (if arg -1 1))
-         (n (cond ((integerp olivetti-body-width)
-                   (+ olivetti-body-width (* 2 p)))
-                  ((floatp olivetti-body-width)
-                   (+ olivetti-body-width (* 0.01 p))))))
-    (setq olivetti-body-width n))
-  (olivetti-set-buffer-windows)
-  (message "Text body width set to %s" olivetti-body-width)
-  (unless overriding-terminal-local-map
-    (let ((prefix-keys (substring (this-single-command-keys) 0 -1))
-          (map (cdr olivetti-mode-map)))
-      (when (< 0 (length prefix-keys))
-        (mapc (lambda (k) (setq map (assq k map))) prefix-keys)
-        (setq map (cdr-safe map))
-        (when (keymapp map) (set-transient-map map t))))))
-
-(defun olivetti-shrink (&optional arg)
-  "Incrementally decrease the value of `olivetti-body-width'.
-If prefixed with ARG, incrementally increase."
-  (interactive "P")
-  (let ((p (unless arg t)))
-    (olivetti-expand p)))
-
-
-;;; Keymap ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defvar olivetti-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c }") #'olivetti-expand)
-    (define-key map (kbd "C-c {") #'olivetti-shrink)
-    (define-key map (kbd "C-c |") #'olivetti-set-width)
-    (define-key map (kbd "C-c \\") #'olivetti-set-width) ;; OBSOLETE
-    (define-key map [left-margin mouse-1] #'mouse-set-point)
-    (define-key map [right-margin mouse-1] #'mouse-set-point)
-    (define-key map [left-fringe mouse-1] #'mouse-set-point)
-    (define-key map [right-fringe mouse-1] #'mouse-set-point)
-    ;; This code is taken from https://github.com/joostkremers/visual-fill-column
-    (when (and (bound-and-true-p mouse-wheel-mode)
-               (boundp 'mouse-wheel-down-event)
-               (boundp 'mouse-wheel-up-event))
-      (define-key map (vector 'left-margin 'mouse-wheel-down-event) 'mwheel-scroll)
-      (define-key map (vector 'left-margin 'mouse-wheel-up-event) 'mwheel-scroll)
-      (define-key map (vector 'right-margin 'mouse-wheel-down-event) 'mwheel-scroll)
-      (define-key map (vector 'right-margin 'mouse-wheel-up-event) 'mwheel-scroll))
-    map)
-  "Mode map for `olivetti-mode'.")
 
 
 ;;; Mode Definition ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -445,54 +354,36 @@ If prefixed with ARG, incrementally increase."
   "Olivetti provides a nice writing environment.
 Window margins are set to relative widths to accomodate a text
 body width set with `olivetti-body-width'."
-  :init-value nil
-  :lighter olivetti-lighter
+  :global t
   (if olivetti-mode
       (progn
-        (cond ((<= emacs-major-version 24)
-               (add-hook 'window-configuration-change-hook
-                         #'olivetti-set-buffer-windows t t))
-              ((<= emacs-major-version 26)
-               (add-hook 'window-configuration-change-hook
-                         #'olivetti-set-buffer-windows t t)
-               (add-hook 'window-size-change-functions
-                         #'olivetti-set-window t t))
-              ((<= 27 emacs-major-version)
-               (add-hook 'window-size-change-functions
-                         #'olivetti-set-window t t)))
-        (add-hook 'change-major-mode-hook
-                  #'olivetti-reset-all-windows nil t)
+        (add-hook 'window-size-change-functions
+                  #'olivetti-set-window t)
+        ;; (add-hook 'change-major-mode-hook
+        ;; #'olivetti-reset-all-windows nil)
         (add-hook 'text-scale-mode-hook
-                  #'olivetti-set-buffer-windows t t)
-        (unless (bound-and-true-p olivetti--visual-line-mode)
-          (setq olivetti--visual-line-mode
-                visual-line-mode))
+                  #'olivetti-set-buffer-windows t)
         (unless (bound-and-true-p olivetti--split-window-preferred-function)
           (setq olivetti--split-window-preferred-function
                 split-window-preferred-function))
-        (setq-local split-window-preferred-function
-                    #'olivetti-split-window-sensibly)
+        (setq split-window-preferred-function
+              #'olivetti-split-window-sensibly)
         (setq olivetti--face-remap
               (face-remap-add-relative 'fringe 'olivetti-fringe))
-        (olivetti-set-buffer-windows))
+        (walk-windows #'olivetti-set-window nil t))
     (remove-hook 'window-configuration-change-hook
-                 #'olivetti-set-buffer-windows t)
+                 #'olivetti-set-buffer-windows )
     (remove-hook 'window-size-change-functions
-                 #'olivetti-set-window t)
+                 #'olivetti-set-window )
     (remove-hook 'text-scale-mode-hook
-                 #'olivetti-set-window t)
+                 #'olivetti-set-window )
     (olivetti-set-buffer-windows)
     (set-window-margins nil left-margin-width right-margin-width)
+    (setq split-window-preferred-function
+          olivetti--split-window-preferred-function)
     (when olivetti--face-remap
       (face-remap-remove-relative olivetti--face-remap))
-    (when olivetti-recall-visual-line-mode-entry-state
-      (if olivetti--visual-line-mode
-          (when (not visual-line-mode) (visual-line-mode 1))
-        (when visual-line-mode (visual-line-mode 0))))
-    (mapc #'kill-local-variable '(split-window-preferred-function
-                                  olivetti-body-width
-                                  olivetti--visual-line-mode
-                                  olivetti--face-remap
+    (mapc #'kill-local-variable '(olivetti--face-remap
                                   olivetti--split-window-preferred-function))))
 
 
