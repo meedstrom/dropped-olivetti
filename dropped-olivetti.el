@@ -1,6 +1,7 @@
 ;;; dropped-olivetti.el --- Minor mode for a nice writing environment -*- lexical-binding: t; -*-
 
 ;; Copyright (c) 2014-2023  Paul W. Rankin
+;; Copyright (c) 2024       Martin Edström <meedstrom91@gmail.com>
 
 ;; Author: Paul W. Rankin <hello@paulwrankin.com>
 ;; Keywords: wp, text
@@ -54,12 +55,11 @@
 ;;; Options ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defcustom dropped-olivetti-body-width
-  nil
+  81
   "Text body width to which to adjust relative margin width.
 If an integer, set text body width to that integer in columns; if
 a floating point between 0.0 and 1.0, set text body width to that
-fraction of the total window width. If nil (the default), use the
-value of `fill-column' + 2.
+fraction of the total window width.
 
 An integer is best if you want text body width to remain
 constant, while a floating point is best if you want text body
@@ -196,10 +196,6 @@ window."
     (with-selected-window window-or-frame
       (unless (minibufferp)
         (dropped-olivetti-reset-window window-or-frame)
-        ;; If `dropped-olivetti-body-width' is nil, we need to calculate from
-        ;; `fill-column'
-        (when (null dropped-olivetti-body-width)
-          (setq dropped-olivetti-body-width (+ fill-column 2)))
         (let ((char-width-pix   (frame-char-width (window-frame window-or-frame)))
               (window-width-pix (window-body-width window-or-frame t))
               (safe-width-pix   (dropped-olivetti-normalize-width
